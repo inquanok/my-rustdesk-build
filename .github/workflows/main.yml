@@ -3,7 +3,7 @@ name: Build RustDesk for macOS 10.13
 on:
   workflow_dispatch: # Позволяет запускать сборку вручную кнопкой
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   build-macos:
