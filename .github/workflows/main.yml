@@ -1,0 +1,71 @@
+name: Build RustDesk for macOS 10.13
+
+on:
+  workflow_dispatch: # Позволяет запускать сборку вручную кнопкой
+  push:
+    branches: [ main ]
+
+jobs:
+  build-macos:
+    name: Compile RustDesk Bundle
+    runs-on: macos-12 # Используем современные серверы GitHub (на них есть Xcode)
+
+    steps:
+    # 1. Скачиваем код
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    # 2. Устанавливаем Rust
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+
+    # 3. Устанавливаем зависимости (Clang, CMake, Git уже есть в macos-runners)
+    - name: Install vcpkg and libraries
+      run: |
+        git clone https://github.com/microsoft/vcpkg
+        cd vcpkg
+        ./bootstrap-vcpkg.sh
+        ./vcpkg install libvpx:x64-osx libyuv:x64-osx opus:x64-osx aom:x64-osx
+        echo "VCPKG_ROOT=$(pwd)" >> $GITHUB_ENV
+
+    # 4. Сборка проекта
+    - name: Build RustDesk
+      run: |
+        cargo build --release
+
+    # 5. Создание папки приложения (.app)
+    - name: Create macOS Bundle structure
+      run: |
+        mkdir -p RustDesk.app/Contents/MacOS
+        cp target/release/rustdesk RustDesk.app/Contents/MacOS/RustDesk
+        
+        # Создаем минимальный Info.plist (обязательно для .app)
+        cat > RustDesk.app/Contents/Info.plist << 'EOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>rustdesk</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.rustdesk.app</string>
+            <key>CFBundleName</key>
+            <string>RustDesk</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+        </dict>
+        </plist>
+        EOF
+
+    # 6. Сохранение результата
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rustdesk-macos-app
+        path: RustDesk.app
